@@ -1,0 +1,10 @@
+{
+  "name": "lecture-notebook",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Take lecture notes while recording — typing, sketches, screenshots and annotated slides, exported as one bundle for the mba-lecture-notes skill.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "dev": "node server.js" },
+  "engines": { "node": ">=18" }
+}

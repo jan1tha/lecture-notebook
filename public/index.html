@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecture Notebook</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%235B8DEF'/><rect x='8' y='7' width='16' height='18' rx='2' fill='%230f1216'/><path d='M11 12h10M11 16h10M11 20h6' stroke='%235B8DEF' stroke-width='1.8' stroke-linecap='round'/></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="rail">
+  <div class="rail__brand">
+    <span class="rail__lamp" id="railLamp" aria-hidden="true"></span>
+    <h1>Lecture&nbsp;Notebook</h1>
+  </div>
+
+  <div class="rail__crumbs" id="railSession" hidden>
+    <button class="crumb" id="railModuleBtn" type="button" hidden></button>
+    <input class="rail__title" id="sessionTitle" aria-label="Lecture title" placeholder="Untitled lecture">
+    <select class="mini" id="sessionModuleSelect" aria-label="Module"></select>
+  </div>
+
+  <div class="rail__actions">
+    <button class="queue" id="queueStrip" type="button" hidden aria-label="Background transcription">
+      <span class="queue__spin" aria-hidden="true"></span>
+      <span class="queue__text" id="queueText">Transcribing</span>
+      <span class="queue__bar"><i id="queueFill"></i></span>
+    </button>
+    <button class="chip" id="setupBtn" type="button">
+      <span class="chip__dot" id="setupDot"></span><span id="setupLabel">Checking…</span>
+    </button>
+    <div class="seg" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-set="system">Auto</button>
+      <button type="button" data-theme-set="light">Light</button>
+      <button type="button" data-theme-set="dark">Dark</button>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- ─────────────────────────────────────────────  library  ─────────── -->
+  <aside class="panel library" id="libraryPanel">
+    <div class="library__head">
+      <h2 class="label">Library</h2>
+      <div class="library__new">
+        <button class="btn btn--ghost btn--sm" id="newModuleBtn" type="button" title="New module">Module</button>
+        <button class="btn btn--sm" id="newSessionBtn" type="button" title="New lecture">Lecture</button>
+      </div>
+    </div>
+    <input class="search" type="search" id="librarySearch" placeholder="Filter lectures and modules" aria-label="Filter library">
+    <div class="library__list" id="libraryList"></div>
+  </aside>
+
+  <!-- ──────────────────────────────────────────────  workspace  ──────── -->
+  <section class="stage" id="stage">
+
+    <!-- ── lecture ──────────────────────────────────────────────────── -->
+    <div class="view" id="lectureView" hidden>
+      <div class="archbar" id="archBar" hidden>
+        <span class="archbar__tag">Archived</span>
+        <span class="archbar__text" id="archText"></span>
+        <span class="composer__spacer"></span>
+        <button class="btn btn--ghost btn--sm" id="archFreeBtn" type="button" hidden></button>
+        <button class="btn btn--sm" id="archRestoreBtn" type="button">Restore</button>
+      </div>
+
+      <div class="transport" id="transport" data-state="idle">
+        <button class="rec" id="recBtn" type="button" aria-label="Start recording" disabled>
+          <span class="rec__ring"></span><span class="rec__core"></span>
+        </button>
+        <div class="transport__readout">
+          <div class="timecode" id="timecode">00:00:00<small>.0</small></div>
+          <div class="transport__status" id="transportStatus">No lecture open</div>
+        </div>
+        <div class="meter" id="meter" aria-hidden="true"></div>
+        <div class="transport__buttons">
+          <span class="warnchip" id="healthChip" hidden></span>
+          <select id="sourceSelect" class="mini" aria-label="Audio source">
+            <option value="browser">Browser tab / screen</option>
+            <option value="device">Audio input device</option>
+          </select>
+          <select id="deviceSelect" class="mini" aria-label="Input device" hidden></select>
+          <button class="btn btn--ghost" id="stopBtn" type="button" hidden>Stop</button>
+        </div>
+      </div>
+
+      <div class="editor-wrap" id="lectureScroll">
+        <div class="editor" id="editor" aria-label="Lecture notes"></div>
+      </div>
+
+      <div class="composer" id="composer">
+        <span class="label">Insert</span>
+        <button class="btn btn--ghost btn--sm" id="addSketch" type="button">Sketch</button>
+        <button class="btn btn--ghost btn--sm" id="addImage" type="button">Screenshot</button>
+        <button class="btn btn--ghost btn--sm" id="addHeading" type="button">Heading</button>
+        <button class="btn btn--ghost btn--sm" id="outlineBtn" type="button" aria-expanded="false">Outline</button>
+        <button class="btn btn--ghost btn--sm" id="archiveBtn" type="button">Archive</button>
+        <span class="composer__spacer"></span>
+        <span class="composer__count" id="noteStats"></span>
+        <span class="composer__hint" id="saveHint">Saved</span>
+        <button class="btn" id="exportBtn" type="button">Build note bundle</button>
+      </div>
+    </div>
+
+    <!-- ── module ───────────────────────────────────────────────────── -->
+    <div class="view" id="moduleView" hidden>
+      <div class="modhead">
+        <div class="modhead__row">
+          <span class="modhead__swatch" id="moduleSwatch"></span>
+          <input class="modhead__name" id="moduleName" placeholder="Module name" aria-label="Module name">
+          <input class="modhead__code mini" id="moduleCode" placeholder="Code" aria-label="Module code">
+          <span class="composer__spacer"></span>
+          <button class="btn btn--ghost btn--sm" id="moduleNewLecture" type="button">New lecture here</button>
+          <button class="btn btn--ghost btn--sm" id="moduleArchive" type="button">Archive module</button>
+          <button class="btn btn--ghost btn--sm btn--danger" id="moduleDelete" type="button">Delete module</button>
+        </div>
+        <div class="modhead__row modhead__row--meta">
+          <label class="field"><span class="label">Lecturer</span>
+            <input class="mini" id="moduleLecturer" placeholder="Who teaches it"></label>
+          <label class="field"><span class="label">Assessments</span>
+            <input class="mini" id="moduleAssessments" placeholder="A1, A2"></label>
+          <div class="swatches" id="moduleColours" role="group" aria-label="Module colour"></div>
+          <span class="composer__spacer"></span>
+          <span class="modhead__count" id="moduleLectureCount"></span>
+        </div>
+      </div>
+
+      <div class="editor-wrap" id="moduleScroll">
+        <div class="modnote__intro">
+          <h3>Module notes</h3>
+          <p>Everything that is true all term rather than in one lecture: the reading, the frameworks, the questions you want to ask, what each assessment actually wants. These travel with every note bundle you build from this module, as reference material.</p>
+        </div>
+        <div class="editor" id="moduleEditor" aria-label="Module notes"></div>
+      </div>
+
+      <div class="composer">
+        <span class="label">Insert</span>
+        <button class="btn btn--ghost btn--sm" id="modAddSketch" type="button">Sketch</button>
+        <button class="btn btn--ghost btn--sm" id="modAddImage" type="button">Screenshot</button>
+        <button class="btn btn--ghost btn--sm" id="modOutlineBtn" type="button" aria-expanded="false">Outline</button>
+        <span class="composer__spacer"></span>
+        <span class="composer__count" id="moduleStats"></span>
+        <span class="composer__hint" id="moduleSaveHint">Saved</span>
+      </div>
+    </div>
+
+    <!-- ── nothing open ─────────────────────────────────────────────── -->
+    <div class="view view--empty" id="emptyView">
+      <div class="editor__empty">
+        <h3>Nothing open</h3>
+        <p>Make a module for each subject, then a lecture inside it. Hit record when the lecturer starts — the audio is captured straight to disk and transcribed afterwards in the background, so nothing competes with the recording while it matters.</p>
+        <div class="editor__emptyrow">
+          <button class="btn" id="emptyNewModule" type="button">New module</button>
+          <button class="btn btn--ghost" id="emptyNewLecture" type="button">New lecture</button>
+        </div>
+      </div>
+    </div>
+
+    <input type="file" id="imageInput" accept="image/*" hidden multiple>
+  </section>
+
+  <!-- ────────────────────────────────────────  transcript + slides  ──── -->
+  <aside class="panel side" id="sidePanel">
+    <div class="side__tabs" role="tablist">
+      <button role="tab" id="tabTranscript" class="is-on" type="button" aria-selected="true">Transcript</button>
+      <button role="tab" id="tabSlides" type="button" aria-selected="false">Slides</button>
+    </div>
+
+    <div class="side__body" id="paneTranscript" role="tabpanel">
+      <div class="reclist" id="recList"></div>
+      <div class="side__toolbar">
+        <input class="search" type="search" id="transcriptSearch" placeholder="Search transcript" aria-label="Search transcript">
+      </div>
+      <div class="feed" id="feed"></div>
+      <div class="side__empty" id="transcriptEmpty">
+        <p>Nothing recorded yet. Press record; when you stop, the lecture goes into the transcription queue and the text lands here — click any line to pull it into your notes.</p>
+      </div>
+    </div>
+
+    <div class="side__body" id="paneSlides" role="tabpanel" hidden>
+      <div class="side__toolbar">
+        <select id="deckSelect" class="mini" aria-label="Deck"></select>
+        <button class="btn btn--ghost btn--sm" id="addDeck" type="button">Add deck</button>
+      </div>
+      <div class="deck" id="deck">
+        <div class="side__empty" id="deckEmpty">
+          <p>Add the lecturer's PDF or PowerPoint. Pages render here so you can draw on them and pin notes to a slide.</p>
+        </div>
+      </div>
+      <div class="deck__bar" id="deckBar" hidden>
+        <button class="btn btn--ghost btn--sm" id="pagePrev" type="button">‹</button>
+        <span class="deck__count" id="pageCount">–</span>
+        <button class="btn btn--ghost btn--sm" id="pageNext" type="button">›</button>
+        <span class="composer__spacer"></span>
+        <button class="btn btn--ghost btn--sm" id="inkToggle" type="button" aria-pressed="false">Draw</button>
+        <button class="btn btn--ghost btn--sm" id="pinSlide" type="button">Note on this slide</button>
+      </div>
+    </div>
+    <input type="file" id="deckInput" accept=".pdf,.ppt,.pptx,.odp" hidden>
+  </aside>
+</main>
+
+<!-- ────────────────────────────────────────────────  overlays  ───────── -->
+<div class="pop" id="outlinePop" hidden></div>
+
+<div class="sheet" id="setupSheet" hidden>
+  <div class="sheet__scrim" data-close-sheet></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <header class="sheet__head">
+      <h2 id="setupTitle">Setup</h2>
+      <button class="icon" type="button" data-close-sheet aria-label="Close">&times;</button>
+    </header>
+    <div class="sheet__body" id="setupBody"></div>
+  </div>
+</div>
+
+<div class="sheet" id="exportSheet" hidden>
+  <div class="sheet__scrim" data-close-export></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+    <header class="sheet__head">
+      <h2 id="exportTitle">Note bundle</h2>
+      <button class="icon" type="button" data-close-export aria-label="Close">&times;</button>
+    </header>
+    <div class="sheet__body" id="exportBody"></div>
+  </div>
+</div>
+
+<div class="sheet" id="queueSheet" hidden>
+  <div class="sheet__scrim" data-close-queue></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="queueTitle">
+    <header class="sheet__head">
+      <h2 id="queueTitle">Transcription queue</h2>
+      <button class="icon" type="button" data-close-queue aria-label="Close">&times;</button>
+    </header>
+    <div class="sheet__body" id="queueBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="sketchModal" hidden>
+  <div class="modal__scrim" data-close-sketch></div>
+  <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Sketch">
+    <div class="modal__head">
+      <span class="label">Sketch</span>
+      <span class="composer__spacer"></span>
+      <button class="btn btn--ghost btn--sm" data-close-sketch type="button">Cancel</button>
+      <button class="btn btn--sm" id="sketchSave" type="button">Save sketch</button>
+    </div>
+    <div class="modal__body" id="sketchHost"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>
