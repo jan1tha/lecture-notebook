@@ -16,28 +16,127 @@ the app being closed.
 
 ![The notebook](docs/console.png)
 
-## Run it
+## Installation
+
+The app is a single Node process with **no npm dependencies and no build
+step**. It runs on macOS only, because audio capture uses ffmpeg's
+`avfoundation` input and the Setup panel installs tools through Homebrew.
+
+**1. Prerequisites**
+
+| Need | Why | Install |
+|------|-----|---------|
+| Node.js ≥ 18 | runs the server | `brew install node` or [nodejs.org](https://nodejs.org) |
+| Homebrew | the Setup panel uses it to install the tools below | [brew.sh](https://brew.sh) |
+| Google Chrome | the *Browser tab / screen* source needs Chrome's tab-audio picker | [google.com/chrome](https://www.google.com/chrome/) |
+
+**2. Command-line tools**
 
 ```bash
-npm start          # http://localhost:4210
-PORT=5000 npm start
+brew install ffmpeg whisper-cpp          # required
+brew install poppler                     # optional: renders slide decks
+brew install --cask libreoffice          # optional: .ppt/.pptx → PDF
+brew install --cask blackhole-2ch        # optional: record Teams/Zoom desktop apps
 ```
 
-No npm dependencies. It does use four command-line tools, and the **Setup**
-panel tells you which are missing:
+| Tool | For | Required? |
+|------|-----|-----------|
+| ffmpeg | recording | **yes** |
+| whisper-cpp | transcription (`whisper-cli`) | **yes** |
+| poppler | PDF → page images and text | no — without it you can still record and take notes, just not add slides |
+| LibreOffice | converting PowerPoint to PDF | no — PDFs work without it |
+| BlackHole | a loopback audio device | no — only for the Teams/Zoom *desktop* apps; a lecture in a Chrome tab needs nothing |
 
-| Tool | For | Install |
-|------|-----|---------|
-| ffmpeg | recording | `brew install ffmpeg` |
-| whisper-cpp | transcription | `brew install whisper-cpp` |
-| poppler | rendering slides | `brew install poppler` |
-| LibreOffice | `.ppt`/`.pptx` → PDF | `brew install --cask libreoffice` |
+You can skip this step: the Setup panel in the app shows what is missing and
+has an **Install** button for whisper-cpp and poppler.
 
-Only the first two are required. Without poppler you can still record and take
-notes; you just can't render slide decks.
+**3. Get the code and run it**
 
-Models are **shared with Audio Scribe** — if you already installed a model
-there, this app picks it up and downloads nothing.
+```bash
+git clone https://github.com/jan1tha/lecture-notebook.git
+cd lecture-notebook
+npm start                                # http://localhost:4210
+```
+
+`PORT=5000 npm start` picks another port. The server binds to `127.0.0.1`
+only — it is never reachable from another machine.
+
+The first start creates `data/` beside the code. Everything you record and
+write lives there, and it is gitignored. Back that folder up, not the repo.
+
+**4. Check it is working**
+
+Open [http://localhost:4210](http://localhost:4210). The chip in the top-right
+corner says **Setup — ready** when ffmpeg, whisper and at least one model are
+in place. If it says anything else, click it: the panel lists each tool with
+its status and a one-line fix.
+
+## Setup
+
+Click the **Setup** chip in the top-right corner. Everything below is in that
+panel; nothing needs editing by hand.
+
+**Download a transcription model.** whisper.cpp needs a model file, and none
+ships with the app. The panel lists them with their sizes and the free space on
+your disk. Press **Download** next to **Large v3 Turbo** (1.6 GB) — it is the
+default, and the one to start with. A stopped download can be resumed. See
+[Choosing a model](#choosing-a-model) for the trade-offs.
+
+Models go in `models/` inside the repo, unless either of these exists first:
+
+| Location | When |
+|----------|------|
+| `$MODELS_DIR` | you set the environment variable |
+| `../audio-scribe/models` | you also have [Audio Scribe](../audio-scribe) checked out next to this repo — the two apps share one download |
+
+**Pick the audio source.** The dropdown on the transport (next to the clock)
+has two kinds of input:
+
+- **Browser tab / screen** — for a lecture on Teams, Meet or Zoom in a Chrome
+  tab, or a recorded lecture on YouTube. When Chrome asks what to share, pick
+  the tab and tick **Also share tab audio**. No extra setup.
+- **Audio input device** — your microphone, for an in-person lecture. To record
+  the Teams or Zoom *desktop* apps instead, install BlackHole (command above),
+  then in **System Settings → Privacy & Security** approve the driver when
+  macOS asks. The Setup panel's **System audio** card goes green once it sees
+  the device.
+
+**Grant macOS permissions.** The first device recording makes macOS ask for
+microphone access for your terminal (or whatever launched `node`). If the meter
+stays flat, check **System Settings → Privacy & Security → Microphone**. Chrome
+asks for its own screen-and-tab permission the first time you share a tab.
+
+**Optional settings in the panel:**
+
+- **Also show a rough live transcript while recording** — off by default. It
+  streams a rough transcript during the lecture using a small model, at the
+  cost of CPU during the one part of the session that must not glitch. The
+  transcript you keep is the background one either way.
+- **Live preview model** — only used when the above is on. `base.en` is fine.
+
+**Settings with no UI.** A handful of knobs live in `data/settings.json` and
+can be changed with a POST to `/api/settings`; the defaults are right for
+almost everyone.
+
+```bash
+curl -X POST localhost:4210/api/settings \
+  -H 'content-type: application/json' \
+  -d '{"notesDir":"/Users/you/Documents/MBA/Notes"}'
+```
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `notesDir` | `~/Documents/Personal/MBA/Notes` in the prompt | where the generated prompt tells Claude to write the finished note (absolute path, no `~`) |
+| `language` | `auto` | force a transcription language, e.g. `en` |
+| `backgroundThreads` | `0` (half the cores) | CPU given to background transcription |
+| `stallSeconds` | `12` | how long with no audio before capture is restarted |
+| `keepPcm` | `false` | keep the raw PCM after transcription (~115 MB/hour) |
+| `slideDpi` | `140` | resolution slide pages are rendered at |
+
+**For the last step — turning a bundle into a note —** you need Claude Code
+with the `mba-lecture-notes` skill installed at
+`~/.claude/skills/mba-lecture-notes/`. The app does not need it to run; it only
+affects what you do with the exported folder.
 
 ## Using it
 
