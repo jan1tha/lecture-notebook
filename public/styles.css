@@ -558,6 +558,26 @@ select:hover, .search:hover { border-color: var(--ink-3); }
 .deck__stage { position: relative; line-height: 0; box-shadow: var(--shadow); border: 1px solid var(--line); }
 .deck__stage img { display: block; max-width: 100%; height: auto; }
 .deck__stage .sketch { position: absolute; inset: 0; }
+/* ---- lecture materials (handouts, readings) ---- */
+.mats { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px 30px; display: grid; gap: 6px; align-content: start; }
+.mats.is-dropping { outline: 2px dashed var(--accent); outline-offset: -8px; background: var(--accent-soft); }
+.mat { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); padding: 8px 10px; display: grid; gap: 4px; }
+.mat--busy { opacity: .6; }
+.mat--bad { border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+.mat__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mat__name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mat__name a { color: inherit; text-decoration: none; }
+.mat__name a:hover { text-decoration: underline; }
+.mat__dir { font-weight: 500; color: var(--ink-3); }
+.mat__kind { font: 600 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; white-space: nowrap; }
+.mat__meta { font: 500 11px/1.5 var(--mono); color: var(--ink-3); }
+.mat__problem { font-size: 11.5px; line-height: 1.45; color: var(--warn); }
+.mat__note { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px dashed var(--line); background: none; padding: 3px 0; font: italic 12px/1.5 var(--serif); color: var(--ink-2); outline: none; }
+.mat__note:focus { border-bottom-color: var(--accent); }
+.mat__note::placeholder { color: var(--ink-3); }
+.mat__x { border: 0; background: none; cursor: pointer; color: var(--ink-3); font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 4px; flex: none; }
+.mat__x:hover { color: var(--danger); background: var(--surface); }
+
 .deck__bar { flex: none; display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .deck__count { font: 500 11px/1 var(--mono); color: var(--ink-2); }
 

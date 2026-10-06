@@ -39,12 +39,13 @@ lib/devices.js         avfoundation input list                    (verbatim fork
 lib/http.js            json/sse/static/range helpers              (verbatim fork)
 lib/setup.js           env checks incl. poppler + soffice, installs, downloads
 lib/slides.js          soffice PPTX->PDF, pdftoppm PDF->PNG, pdftotext per page
+lib/materials.js       handouts/readings: store untouched, PDF rendition, text extraction
 lib/exporter.js        the export bundle — all markdown generation lives here
-public/index.html      three columns: library | workspace | transcript+slides
-public/app.js          shell: library tree, transport, SSE, queue, decks, export
+public/index.html      three columns: library | workspace | transcript+slides+materials
+public/app.js          shell: library tree, transport, SSE, queue, decks, materials, export
 public/editor.js       the block editor (lecture notes *and* module notes)
 public/sketch.js       SketchPad — note sketches AND slide ink
-data/sessions/<id>/    meta.json, notebook.json, recordings/, assets/, slides/, export/
+data/sessions/<id>/    meta.json, notebook.json, recordings/, assets/, slides/, materials/, export/
 data/modules/<id>/     module.json, notes.json, assets/
 data/jobs.json         the transcription queue, so it survives a restart
 ```
@@ -297,11 +298,22 @@ that vocabulary, pre-answering its Step 1 questions so it doesn't stall asking.
 
 - The skill reads the **original PDF** with `Read pages`, so `slides/<name>.pdf`
   must stay a real PDF — page PNGs are not a substitute.
-- **Module notes fill the Reference documents slot.** They are the student's
-  standing notes on the subject, exported to `reference/module-notes.md` with
-  their images in `reference/images/`. When a lecture has no module the manifest
-  says so explicitly and tells the skill not to wait for files that will never
-  arrive.
+- **Two things fill the Reference documents slot.** Module notes are the
+  student's standing notes on the subject, exported to
+  `reference/module-notes.md` with their images in `reference/images/`.
+  Lecture materials (`meta.materials`, from `lib/materials.js`) are the
+  handouts and readings: each original is copied under `reference/materials/`
+  with its upload folder structure intact, an office document also gets its
+  PDF rendition next to it (the skill reads PDFs, not `.docx`), and any
+  extracted text goes under `reference/materials-text/` with the same relative
+  path. The manifest lists every file with pages, words and the student's
+  one-line note on it. When neither exists the manifest says so explicitly and
+  tells the skill not to wait for files that will never arrive.
+- **A material that cannot be read is still a material.** `ingestMaterial`
+  never fails on conversion: the original is kept, `problem` says why in plain
+  words, the UI shows it and the manifest puts it in Data caveats. Losing a
+  file because LibreOffice choked on it would be the wrong trade. Two uploads
+  with the same name both survive the export (`handout-2.docx`).
 - Assessments fall back from the lecture to its module, which is where the
   student actually maintains them.
 - The output path is filed per module: `<notesDir>/<Module-Name>/<Lecture>.md`.
@@ -328,7 +340,12 @@ that vocabulary, pre-answering its Step 1 questions so it doesn't stall asking.
 - **archiving**: shelf collapsed by default and reopened by a search, row hover
   toggle, module archive with and without cascade, the banner and its disabled
   transport, freeing audio (transcript and notes intact afterwards, the
-  re-transcribe button correctly gone), and restore putting all of it back.
+  re-transcribe button correctly gone), and restore putting all of it back;
+- **materials** (Oct 2026): PDF, `.docx` (converted and read), `.md` and PNG
+  uploaded with nested folder paths, a note PATCHed on, a duplicate name,
+  deletion, and the export laying all of it out under `reference/` with the
+  manifest listing each file. The Materials tab itself was driven headlessly:
+  load, tab switch, rows rendered, no console errors.
 
 **Never yet run against a real lecture.** Untested with a human in the loop:
 typing for a sustained period, the sketch pad with a trackpad/Pencil, pasting
@@ -354,10 +371,11 @@ multi-hour recording (the longest tested is 35 s).
    `reference/module-notes.md`, the fix is a paragraph in that skill's SKILL.md,
    not in this repo, and needs the user's say-so since it is outside this
    project.
-5. No "reference documents" concept for **handouts and textbook extracts** —
-   module notes now occupy that slot, but an uploaded PDF does not. Would be a
-   small feature: store the file, extract text, copy into `export/reference/`,
-   mention it in MANIFEST.md.
+5. Materials are **per lecture only.** A textbook chapter that spans three
+   lectures has to be uploaded to each. A module-level materials folder that
+   every lecture's bundle carries along (the way module notes already do) is
+   the obvious extension; `lib/materials.js` is written against a directory,
+   so it would be a second call site, not a second implementation.
 6. `settings.notesDir` defaults to `~/Documents/Personal/MBA/Notes` in the
    generated prompt but has no UI; it is only settable through `POST /api/settings`.
 7. Ported-back fixes: the stall watchdog, capture restart, streamed WAV slice

@@ -43,8 +43,8 @@ brew install --cask blackhole-2ch        # optional: record Teams/Zoom desktop a
 |------|-----|-----------|
 | ffmpeg | recording | **yes** |
 | whisper-cpp | transcription (`whisper-cli`) | **yes** |
-| poppler | PDF → page images and text | no — without it you can still record and take notes, just not add slides |
-| LibreOffice | converting PowerPoint to PDF | no — PDFs work without it |
+| poppler | PDF → page images and text | no — without it you can still record and take notes, just not add slides or read handouts |
+| LibreOffice | converting PowerPoint and Word files to PDF | no — PDFs work without it |
 | BlackHole | a loopback audio device | no — only for the Teams/Zoom *desktop* apps; a lecture in a Chrome tab needs nothing |
 
 You can skip this step: the Setup panel in the app shows what is missing and
@@ -215,6 +215,20 @@ Pages render so you can:
 
 The original file is never modified. Annotations live beside it.
 
+**Add the handouts.** On the **Materials** tab, add anything else the lecturer
+gave out or set as reading: a textbook chapter, a case study, an article, a
+reading list. **Add files** takes a few files, **Add folder** takes a whole
+folder with its sub-folders, and you can drop either straight onto the tab.
+
+Each file is kept exactly as uploaded and read as far as the tools on your
+machine allow: PDFs have their text extracted, Word and PowerPoint files are
+converted to PDF and then read, Markdown and text are taken as they are, and
+images are simply carried along. The one-line box under each file is for *why
+it is there* — "ch. 6, set reading for A1" — and that line goes into the bundle
+so the note generator knows what to do with it. A file that could not be read
+(a scanned PDF, say) is still filed and still exported; the tab tells you why
+it has no text.
+
 **Build the bundle.** Press **Build note bundle**. You get a folder and a prompt
 to paste into Claude Code:
 
@@ -234,6 +248,8 @@ transcript.md            raw whisper output, timestamped
 my-notes.md              your notes in the order you wrote them
 combined-timeline.md     your notes interleaved with the transcript, by time
 reference/module-notes.md  your standing notes on the module
+reference/materials/     handouts and readings, as uploaded, folders intact
+reference/materials-text/  the same files as plain text, where there was any
 session.json             the same data, machine-readable
 slides/<deck>.pdf        the original deck (the skill reads it page by page)
 slides/annotated/        pages you drew on, ink composited in

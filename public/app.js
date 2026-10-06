@@ -32,6 +32,7 @@ for (const id of [
   'moduleEditor', 'modAddSketch', 'modAddImage', 'modOutlineBtn',
   'moduleStats', 'moduleSaveHint',
   'tabTranscript', 'tabSlides', 'paneTranscript', 'paneSlides',
+  'tabMaterials', 'paneMaterials', 'addMaterials', 'addMaterialFolder', 'matCount', 'matList', 'matEmpty', 'matInput', 'matFolderInput',
   'transcriptSearch', 'recList', 'feed', 'transcriptEmpty',
   'deckSelect', 'addDeck', 'deck', 'deckEmpty', 'deckBar', 'pagePrev', 'pageNext',
   'pageCount', 'inkToggle', 'pinSlide', 'deckInput',
@@ -57,7 +58,7 @@ const state = {
   audioCtx: null, analyser: null,
   events: null, jobStream: null, uploads: Promise.resolve(), pendingChunks: 0,
   timer: null, meterRaf: null,
-  deck: null, page: 1, inking: false, pad: null, deckPad: null,
+  deck: null, page: 1, inking: false, pad: null, deckPad: null, matUploading: null,
   dirty: false, moduleDirty: false, editor: null, modEditor: null,
 };
 
@@ -684,6 +685,7 @@ async function openSession(id) {
   paintRecList();
   paintFeed();
   paintDeckSelect();
+  paintMaterials();
   paintLibrary();
   history.replaceState(null, '', `#s=${id}`);
 }
@@ -1840,17 +1842,18 @@ function highlightAt(t) {
 
 /* ──────────────────────────────────────────────────────────────  tabs  ── */
 
+const TABS = { transcript: ['tabTranscript', 'paneTranscript'], slides: ['tabSlides', 'paneSlides'], materials: ['tabMaterials', 'paneMaterials'] };
 function showTab(which) {
-  const transcript = which === 'transcript';
-  el.tabTranscript.classList.toggle('is-on', transcript);
-  el.tabSlides.classList.toggle('is-on', !transcript);
-  el.tabTranscript.setAttribute('aria-selected', String(transcript));
-  el.tabSlides.setAttribute('aria-selected', String(!transcript));
-  el.paneTranscript.hidden = !transcript;
-  el.paneSlides.hidden = transcript;
+  for (const [name, [tab, pane]] of Object.entries(TABS)) {
+    const on = name === which;
+    el[tab].classList.toggle('is-on', on);
+    el[tab].setAttribute('aria-selected', String(on));
+    el[pane].hidden = !on;
+  }
 }
 el.tabTranscript.addEventListener('click', () => showTab('transcript'));
 el.tabSlides.addEventListener('click', () => showTab('slides'));
+el.tabMaterials.addEventListener('click', () => showTab('materials'));
 
 /* ─────────────────────────────────────────────────────────────  slides  ── */
 
@@ -2001,6 +2004,163 @@ function pinSlide() {
 }
 el.pinSlide.addEventListener('click', pinSlide);
 
+/* ──────────────────────────────────────────────────────────  materials  ── */
+
+/* Handouts and readings. Each is uploaded on its own so one bad file does not
+   sink a folder of good ones, and the list repaints after every upload so a
+   twenty-file folder visibly fills in rather than appearing all at once. */
+
+const MAT_KIND = { pdf: 'PDF', office: 'DOC', text: 'TEXT', image: 'IMG', other: 'FILE' };
+const fmtBytes = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+function paintMaterials() {
+  const mats = state.session?.materials || [];
+  el.matList.textContent = '';
+  el.matCount.textContent = mats.length ? `${mats.length} file${mats.length === 1 ? '' : 's'}` : '';
+  if (!mats.length && !state.matUploading) { el.matList.append(el.matEmpty); el.matEmpty.hidden = false; return; }
+  const sorted = mats.slice().sort((a, b) => (a.relPath || a.name).localeCompare(b.relPath || b.name));
+  for (const m of sorted) el.matList.append(materialRow(m));
+  if (state.matUploading) {
+    const busy = document.createElement('div');
+    busy.className = 'mat mat--busy';
+    busy.innerHTML = `<div class="mat__row"><span class="mat__name">${state.matUploading}</span></div><div class="mat__meta">uploading…</div>`;
+    el.matList.append(busy);
+  }
+}
+
+function materialRow(m) {
+  const row = document.createElement('div');
+  row.className = `mat${m.problem ? ' mat--bad' : ''}`;
+
+  const top = document.createElement('div');
+  top.className = 'mat__row';
+  const name = document.createElement('span');
+  name.className = 'mat__name';
+  const dirPart = (m.relPath || '').includes('/') ? `${m.relPath.slice(0, m.relPath.lastIndexOf('/') + 1)}` : '';
+  const link = document.createElement('a');
+  // A browser can show a PDF rendition inline where it would only download a .docx.
+  link.href = `/api/sessions/${state.session.id}/materials/${m.id}/file${m.pdfFile && m.kind !== 'pdf' ? '?as=pdf' : ''}`;
+  link.target = '_blank'; link.rel = 'noopener';
+  link.textContent = m.name;
+  link.title = 'Open';
+  if (dirPart) { const d = document.createElement('span'); d.className = 'mat__dir'; d.textContent = dirPart; name.append(d); }
+  name.append(link);
+  const kind = document.createElement('span');
+  kind.className = 'mat__kind'; kind.textContent = MAT_KIND[m.kind] || 'FILE';
+  const x = document.createElement('button');
+  x.type = 'button'; x.className = 'mat__x'; x.textContent = '×'; x.title = 'Remove from this lecture';
+  x.addEventListener('click', async () => {
+    if (!confirm(`Remove "${m.name}" from this lecture?\n\nThe file is deleted from the notebook's copy. Your original is untouched.`)) return;
+    try {
+      await api(`/api/sessions/${state.session.id}/materials/${m.id}`, { method: 'DELETE' });
+      state.session.materials = (state.session.materials || []).filter((y) => y.id !== m.id);
+      paintMaterials();
+    } catch (err) { toast(err.message, 'bad'); }
+  });
+  top.append(name, kind, x);
+
+  const meta = document.createElement('div');
+  meta.className = 'mat__meta';
+  const bits = [fmtBytes(m.bytes)];
+  if (m.pages) bits.push(`${m.pages} page${m.pages === 1 ? '' : 's'}`);
+  if (m.hasText) bits.push(`${m.words.toLocaleString()} words`);
+  else if (m.kind !== 'image') bits.push('no text');
+  meta.textContent = bits.join(' · ');
+
+  const note = document.createElement('input');
+  note.className = 'mat__note'; note.type = 'text'; note.maxLength = 500;
+  note.placeholder = 'Why this is here — "ch. 6, set reading for A1"';
+  note.value = m.note || '';
+  note.addEventListener('change', async () => {
+    try {
+      const { material } = await api(`/api/sessions/${state.session.id}/materials/${m.id}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ note: note.value }),
+      });
+      Object.assign(m, material);
+    } catch (err) { toast(err.message, 'bad'); }
+  });
+
+  row.append(top, meta);
+  if (m.problem) { const p = document.createElement('div'); p.className = 'mat__problem'; p.textContent = m.problem; row.append(p); }
+  row.append(note);
+  return row;
+}
+
+async function uploadMaterials(files) {
+  if (!state.session) return;
+  const list = [...files].filter((f) => f.size > 0 && !f.name.startsWith('.'));
+  if (!list.length) return;
+  const sessionId = state.session.id;
+  let ok = 0;
+  for (const f of list) {
+    if (state.session?.id !== sessionId) break; // the student moved on; don't file into the wrong lecture
+    const rel = f.webkitRelativePath || '';
+    state.matUploading = rel || f.name;
+    paintMaterials();
+    try {
+      const { material } = await api(
+        `/api/sessions/${sessionId}/materials?name=${encodeURIComponent(f.name)}&path=${encodeURIComponent(rel)}`,
+        { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: f },
+      );
+      state.session.materials = [...(state.session.materials || []), material];
+      ok += 1;
+    } catch (err) { toast(`${f.name}: ${err.message}`, 'bad'); }
+    state.matUploading = null;
+    paintMaterials();
+  }
+  if (ok) toast(`${ok} file${ok === 1 ? '' : 's'} added to this lecture.`, 'ok');
+}
+
+el.addMaterials.addEventListener('click', () => el.matInput.click());
+el.addMaterialFolder.addEventListener('click', () => el.matFolderInput.click());
+for (const input of [el.matInput, el.matFolderInput]) {
+  input.addEventListener('change', async () => {
+    const files = [...input.files];
+    input.value = '';
+    await uploadMaterials(files);
+  });
+}
+
+// Dropping onto the Materials pane. A dropped folder arrives as directory
+// entries, which have to be walked; a dropped set of files is just files.
+el.paneMaterials.addEventListener('dragover', (e) => {
+  if (!e.dataTransfer?.types?.includes('Files')) return;
+  e.preventDefault(); el.matList.classList.add('is-dropping');
+});
+el.paneMaterials.addEventListener('dragleave', () => el.matList.classList.remove('is-dropping'));
+el.paneMaterials.addEventListener('drop', async (e) => {
+  el.matList.classList.remove('is-dropping');
+  if (!e.dataTransfer?.types?.includes('Files')) return;
+  e.preventDefault();
+  const files = await filesFromDrop(e.dataTransfer);
+  await uploadMaterials(files);
+});
+
+async function filesFromDrop(dt) {
+  const items = [...(dt.items || [])];
+  const entries = items.map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+  if (!entries.length) return [...dt.files];
+  const out = [];
+  async function walk(entry, prefix) {
+    if (entry.isFile) {
+      const file = await new Promise((res, rej) => entry.file(res, rej));
+      // webkitRelativePath is read-only on a dropped File, so carry the path alongside.
+      Object.defineProperty(file, 'webkitRelativePath', { value: prefix ? `${prefix}/${file.name}` : '', configurable: true });
+      out.push(file);
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      // readEntries returns in batches of up to 100; keep going until it is empty.
+      for (;;) {
+        const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const child of batch) await walk(child, prefix ? `${prefix}/${entry.name}` : entry.name);
+      }
+    }
+  }
+  for (const entry of entries) await walk(entry, '');
+  return out;
+}
+
 /* ─────────────────────────────────────────────────────────────  export  ── */
 
 el.exportBtn.addEventListener('click', async () => {
@@ -2023,7 +2183,7 @@ function showExport({ dir, prompt, files, stats }) {
   const intro = document.createElement('div');
   intro.className = 'card';
   intro.innerHTML = `<h3>Ready for Claude</h3>
-    <p>Everything from this lecture — transcript, your notes, sketches, screenshots, annotated slides${stats.moduleNotesExported ? ' and your module notes as reference material' : ''} — is in one folder. Paste this into Claude Code to turn it into a proper lecture note.</p>`;
+    <p>Everything from this lecture — transcript, your notes, sketches, screenshots, annotated slides${stats.materialsExported ? `, ${stats.materialsExported} handout${stats.materialsExported === 1 ? '' : 's'}/reading${stats.materialsExported === 1 ? '' : 's'}` : ''}${stats.moduleNotesExported ? ' and your module notes as reference material' : ''} — is in one folder. Paste this into Claude Code to turn it into a proper lecture note.</p>`;
   const pre = document.createElement('pre');
   pre.className = 'term prompt';
   pre.textContent = prompt;
@@ -2051,6 +2211,7 @@ function showExport({ dir, prompt, files, stats }) {
     `${stats.blocks} note blocks`, `${stats.slidesExported} deck(s)`,
     `${stats.annotatedPagesExported} annotated page(s)`,
     `${stats.imagesExported} screenshot(s)`, `${stats.sketchesExported} sketch(es)`,
+    `${stats.materialsExported} reference document(s)`,
   ];
   if (stats.module) bits.push(`module: ${stats.module}`);
   detail.innerHTML = `<div class="card__row"><h3>Bundle contents</h3><span class="state state--ok">built</span></div>

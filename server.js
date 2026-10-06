@@ -27,6 +27,10 @@ import {
 } from './lib/jobs.js';
 import { canRetranscribe } from './lib/rescan.js';
 import {
+  ingestMaterial, readMaterial, materialText, materialFile, deleteMaterial, materialDir,
+  newMaterialId, MAX_MATERIAL_BYTES,
+} from './lib/materials.js';
+import {
   sendJson, sendError, readJson, readBody, openSse, serveStatic, sendFile,
 } from './lib/http.js';
 
@@ -486,6 +490,79 @@ async function route(req, res, url) {
       sendFile(res, file, stat, req);
     });
     return true;
+  }
+
+  /* --------------------------------------------------------- materials */
+  // Handouts, readings, textbook extracts: anything that goes with the
+  // lecture but is not the deck. Stored untouched, read as far as the tools
+  // on this machine allow, and exported as reference documents.
+
+  if (sub === 'materials' && method === 'POST' && !seg[4]) {
+    const name = url.searchParams.get('name') || 'file';
+    const relPath = url.searchParams.get('path') || '';
+    let buf;
+    try {
+      buf = await readBody(req, MAX_MATERIAL_BYTES);
+    } catch (err) {
+      if (/too large/.test(err.message)) return sendError(res, 413, `"${name}" is over ${MAX_MATERIAL_BYTES / 1048576} MB.`), true;
+      throw err;
+    }
+    if (!buf.length) return sendError(res, 400, 'Empty upload'), true;
+    const mid = newMaterialId();
+    try {
+      const material = await ingestMaterial(buf, name, relPath, materialDir(id, mid));
+      updateMeta(id, (m) => { m.materials = [...(m.materials || []), material]; });
+      sendJson(res, 201, { material });
+    } catch (err) {
+      fs.rmSync(materialDir(id, mid), { recursive: true, force: true });
+      throw err;
+    }
+    return true;
+  }
+
+  if (sub === 'materials' && seg[4]) {
+    const mid = assertId(seg[4], 'material id');
+    const what = seg[5];
+    const material = readMaterial(id, mid);
+    if (!material) return sendError(res, 404, 'No such material'), true;
+
+    if (what === 'file' && method === 'GET') {
+      // `?as=pdf` prefers the PDF rendition, which a browser can show inline
+      // where it could not show a .docx.
+      const file = materialFile(id, mid, url.searchParams.get('as') === 'pdf' ? 'pdf' : 'original')
+        || materialFile(id, mid, 'original');
+      fs.stat(file, (err, stat) => {
+        if (err) return sendError(res, 404, 'The file for that material is missing');
+        sendFile(res, file, stat, req);
+      });
+      return true;
+    }
+
+    if (what === 'text' && method === 'GET') {
+      sendJson(res, 200, { text: materialText(id, mid) });
+      return true;
+    }
+
+    if (!what && method === 'PATCH') {
+      const body = await readJson(req);
+      let updated = material;
+      if (typeof body.note === 'string') {
+        updated = { ...material, note: body.note.slice(0, 500) };
+        fs.writeFileSync(path.join(materialDir(id, mid), 'material.json'), JSON.stringify(updated, null, 2));
+        updateMeta(id, (m) => {
+          m.materials = (m.materials || []).map((x) => (x.id === mid ? { ...x, note: updated.note } : x));
+        });
+      }
+      sendJson(res, 200, { material: updated });
+      return true;
+    }
+
+    if (!what && method === 'DELETE') {
+      deleteMaterial(id, mid);
+      updateMeta(id, (m) => { m.materials = (m.materials || []).filter((x) => x.id !== mid); });
+      sendJson(res, 200, { ok: true });
+      return true;
+    }
   }
 
   /* ------------------------------------------------------------- decks */

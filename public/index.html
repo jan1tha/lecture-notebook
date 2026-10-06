@@ -166,6 +166,7 @@
     <div class="side__tabs" role="tablist">
       <button role="tab" id="tabTranscript" class="is-on" type="button" aria-selected="true">Transcript</button>
       <button role="tab" id="tabSlides" type="button" aria-selected="false">Slides</button>
+      <button role="tab" id="tabMaterials" type="button" aria-selected="false">Materials</button>
     </div>
 
     <div class="side__body" id="paneTranscript" role="tabpanel">
@@ -198,7 +199,23 @@
         <button class="btn btn--ghost btn--sm" id="pinSlide" type="button">Note on this slide</button>
       </div>
     </div>
+
+    <div class="side__body" id="paneMaterials" role="tabpanel" hidden>
+      <div class="side__toolbar">
+        <button class="btn btn--ghost btn--sm" id="addMaterials" type="button">Add files</button>
+        <button class="btn btn--ghost btn--sm" id="addMaterialFolder" type="button">Add folder</button>
+        <span class="composer__spacer"></span>
+        <span class="deck__count" id="matCount"></span>
+      </div>
+      <div class="mats" id="matList">
+        <div class="side__empty" id="matEmpty">
+          <p>Handouts, readings, textbook chapters, case studies — anything the lecturer gave out that is not the slide deck. Drop files or a whole folder here. They go into the note bundle as reference documents, with their text extracted so Claude can quote them.</p>
+        </div>
+      </div>
+    </div>
     <input type="file" id="deckInput" accept=".pdf,.ppt,.pptx,.odp" hidden>
+    <input type="file" id="matInput" hidden multiple>
+    <input type="file" id="matFolderInput" hidden multiple webkitdirectory>
   </aside>
 </main>
 
